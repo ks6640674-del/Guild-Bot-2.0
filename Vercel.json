@@ -1,8 +1,14 @@
 {
-  "builds": [{"src": "main.py", "use": "@vercel/python"}],
-  "routes": [{"src": "/(.*)", "dest": "main.py"}],
-  "env": {
-    "GUILD_ID": "YOUR_GUILD_ID",
-    "BOT_COUNT": "10"
-  }
+  "builds": [
+    {
+      "src": "main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "main.py"
+    }
+  ]
 }
