@@ -9,18 +9,25 @@ import requests
 from flask import Flask, jsonify, request
 from datetime import datetime
 
-# ===== YOUR SETTINGS =====
+# ===== YOUR CONFIG =====
 GUILD_ID = os.environ.get("GUILD_ID", "3034682198")
-BOT_COUNT = int(os.environ.get("BOT_COUNT", "12"))
+BOT_COUNT = int(os.environ.get("BOT_COUNT", "10"))
 SERVER = "IND"
-GUEST_FILE = "guest_accounts.txt"
-ACCOUNTS_FILE = "accounts.txt"
-DEBUG_FILE = "debug_log.txt"
 
-# ===== CREATE FLASK APP =====
+# ===== YOUR SIAMBHAU API KEYS =====
+FFINFO_KEY = os.environ.get("FFINFO_KEY", "FFINFO-Free")
+BIND_KEY = os.environ.get("BIND_KEY", "BIND-FREE")
+
+# SiamBhau API Base
+API_BASE = "http://siambhau69.eu.cc"
+
+# Use /tmp for Vercel
+BASE_DIR = "/tmp"
+ACCOUNTS_FILE = os.path.join(BASE_DIR, "account_status.txt")
+DEBUG_FILE = os.path.join(BASE_DIR, "debug_log.txt")
+
 app = Flask(__name__)
 
-# ===== HELPER: LOG DEBUG =====
 def log_debug(msg):
     ts = datetime.now().strftime("%H:%M:%S")
     line = f"[{ts}] {msg}"
@@ -31,33 +38,126 @@ def log_debug(msg):
     except:
         pass
 
+def log_section(title):
+    log_debug("")
+    log_debug("="*60)
+    log_debug(f"  {title}")
+    log_debug("="*60)
+
 # ===== ROUTES =====
 @app.route("/")
 def home():
     return f"""
      
-# 🔥 FF Guild Bot — India 🇮🇳
+# 🔥 FF Guild Glory Bot — India 🇮🇳
 
  
-Guild ID: **{GUILD_ID}**
+⚙️ **Guild ID:** {GUILD_ID} | **Bots:** {BOT_COUNT} | **Server:** {SERVER}
 
  
-Bots: **{BOT_COUNT}**
+✅ FFINFO Key: SET | ✅ BIND Key: SET
 
  
-<a href='/accounts'>View accounts</a>
+<a href='/accounts'>📁 Account Status</a>
 
  
-<a href='/debug'>View Debug Log</a>
+<a href='/debug'>📄 Debug Log</a>
 
  
-<a href='/stats'>View Stats</a>
+<a href='/stats'>📊 Stats</a>
 
  
-<a href='/run'>Run Bot Now</a>
+<a href='/run'>🚀 RUN BOT NOW</a>
 
  
+<a href='/test-keys'>🔑 Test API Keys</a>
+
+ 
+---
+
+### ⚡ How To Use
+
+1. Set your guild to **Auto Approve ON** (no level/rank requirements)
+2. Click **Run Bot Now**
+3. Bot generates guest accounts → gets JWT → joins guild
+4. Check **Account Status** to see results
+
+### 📌 Note
+
+`FFINFO-Free` key works for: Free Fire Info, JWT Generate, Ban Check
+`BIND-FREE` key works for: Bind Tools
+
+For **Guild Join** you may need a key with `guild` access (contact @SiamBhau on Telegram)
     """
+
+@app.route("/test-keys")
+def test_keys():
+    """Test both API keys against various endpoints"""
+    results = {}
+    
+    # Test FFINFO key on jwtgenerate
+    try:
+        test_uid = "1000000000"
+        test_pass = "TESTPASSWORD123"
+        r = requests.get(f"{API_BASE}/jwtgenerate/generate", params={
+            "uid": test_uid, "password": test_pass, "key": FFINFO_KEY
+        }, timeout=10)
+        results["jwtgenerate (FFINFO key)"] = {
+            "status": r.status_code,
+            "response": r.json()
+        }
+    except Exception as e:
+        results["jwtgenerate (FFINFO key)"] = {"error": str(e)}
+    
+    # Test FFINFO key on bancheck
+    try:
+        r = requests.get(f"{API_BASE}/bancheck", params={
+            "uid": test_uid, "region": SERVER, "key": FFINFO_KEY
+        }, timeout=10)
+        results["bancheck (FFINFO key)"] = {
+            "status": r.status_code,
+            "response": r.json()
+        }
+    except Exception as e:
+        results["bancheck (FFINFO key)"] = {"error": str(e)}
+    
+    # Test FFINFO key on guild/info
+    try:
+        r = requests.get(f"{API_BASE}/guild/info", params={
+            "clan_id": GUILD_ID, "key": FFINFO_KEY
+        }, timeout=10)
+        results["guild/info (FFINFO key)"] = {
+            "status": r.status_code,
+            "response": r.json()
+        }
+    except Exception as e:
+        results["guild/info (FFINFO key)"] = {"error": str(e)}
+    
+    # Test FFINFO key on guild/join
+    try:
+        r = requests.get(f"{API_BASE}/guild/join", params={
+            "clan_id": GUILD_ID, "uid": test_uid, "pass": test_pass, "key": FFINFO_KEY
+        }, timeout=10)
+        results["guild/join (FFINFO key)"] = {
+            "status": r.status_code,
+            "response": r.json()
+        }
+    except Exception as e:
+        results["guild/join (FFINFO key)"] = {"error": str(e)}
+    
+    # Test BIND key on guild/join
+    try:
+        r = requests.get(f"{API_BASE}/guild/join", params={
+            "clan_id": GUILD_ID, "uid": test_uid, "pass": test_pass, "key": BIND_KEY
+        }, timeout=10)
+        results["guild/join (BIND key)"] = {
+            "status": r.status_code,
+            "response": r.json()
+        }
+    except Exception as e:
+        results["guild/join (BIND key)"] = {"error": str(e)}
+    
+    return jsonify(results)
 
 @app.route("/accounts")
 def view_accounts():
@@ -76,175 +176,225 @@ def view_debug():
 @app.route("/stats")
 def stats():
     acc_count = 0
-    if os.path.exists(GUEST_FILE):
-        with open(GUEST_FILE) as f:
-            for line in f:
-                if "|" in line:
-                    acc_count += 1
+    joined = 0
+    if os.path.exists(ACCOUNTS_FILE):
+        with open(ACCOUNTS_FILE) as f:
+            content = f.read()
+            acc_count = content.count("ACCOUNT #")
+            joined = content.count("Joined Guild: True")
+    
     return jsonify({
         "guild_id": GUILD_ID,
         "bots": BOT_COUNT,
-        "accounts_created": acc_count,
-        "server": "IND",
+        "server": SERVER,
+        "accounts_processed": acc_count,
+        "joined_guild": joined,
+        "ffinfo_key": FFINFO_KEY,
+        "bind_key": BIND_KEY,
         "status": "idle"
     })
 
 @app.route("/run")
 def run_bot():
-    """Run the bot synchronously on this HTTP request"""
     engine = BotEngine()
     try:
         engine.run_bot()
-        return jsonify({"status": "completed", "message": "Bot finished. Check /debug for logs."})
+        return jsonify({
+            "status": "completed",
+            "accounts": len(engine.accounts),
+            "joined": sum(1 for a in engine.accounts if a["joined_guild"]),
+            "message": "Finished. Check /accounts and /debug."
+        })
     except Exception as e:
-        log_debug(f"ERROR: {str(e)}")
+        log_debug(f"FATAL ERROR: {str(e)}")
         return jsonify({"status": "error", "error": str(e)}), 500
+
 
 # ===== BOT ENGINE =====
 class BotEngine:
     def __init__(self):
         self.accounts = []
     
-    def generate_accounts(self):
-        log_debug(f"\n[STEP 1] Generating {BOT_COUNT} guest accounts...")
-        generated = []
-        for i in range(BOT_COUNT):
-            uid = str(random.randint(1000000000, 9999999999))
-            pw = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-            name = f"Mrx__{random.randint(100,999)}"
-            generated.append({"uid": uid, "password": pw, "name": name, "server": SERVER})
-            log_debug(f"  [{i+1}/{BOT_COUNT}] {uid} | {pw} | {name}")
-            time.sleep(0.5)
+    def siambhau_request(self, endpoint, params, key=None):
+        """Make request to SiamBhau API with appropriate key"""
+        if key is None:
+            # Try FFINFO key first, fallback to BIND key
+            params["key"] = FFINFO_KEY
+        else:
+            params["key"] = key
         
-        with open(GUEST_FILE, "w") as f:
-            for acc in generated:
-                f.write(f"{acc['uid']} | {acc['password']} | {acc['name']}\n")
-        
-        self.accounts = generated
-        log_debug(f"[+] Generated {len(generated)} accounts and saved to {GUEST_FILE}")
-    
-    def name_bot(self, uid, password):
-        name = f"Mrx__{random.randint(100,999)}"
-        log_debug(f"  Named {uid} -> {name}")
-        return name
-    
-    def check_account(self, uid):
-        banned = random.choice([True, False])
-        info = "No ban" if not banned else "Suspicious activity"
-        return banned, info
+        url = f"{API_BASE}{endpoint}"
+        try:
+            r = requests.get(url, params=params, timeout=20)
+            data = r.json()
+            return data, r.status_code
+        except Exception as e:
+            return {"error": str(e)}, 500
     
     def get_jwt(self, uid, password):
-        token = ''.join(random.choices(string.ascii_letters + string.digits, k=40))
-        return token
+        """Get JWT token via SiamBhau API using FFINFO key"""
+        log_debug(f"  [JWT] Getting token for UID {uid}...")
+        data, status = self.siambhau_request("/jwtgenerate/generate", {
+            "uid": uid, "password": password
+        }, key=FFINFO_KEY)
+        
+        if status == 200 and data.get("status") in ("live", "valid"):
+            token = data.get("token")
+            if token:
+                log_debug(f"  [JWT] ✅ Token obtained ({token[:30]}...)")
+                return token
+        
+        log_debug(f"  [JWT] ❌ Failed: {data}")
+        return None
+    
+    def check_ban(self, uid):
+        """Check if account is banned"""
+        log_debug(f"  [BANCHECK] Checking UID {uid}...")
+        data, status = self.siambhau_request("/bancheck", {
+            "uid": uid, "region": SERVER
+        }, key=FFINFO_KEY)
+        
+        if status == 200:
+            banned = data.get("banned", False)
+            info = data.get("message", "Unknown")
+            log_debug(f"  [BANCHECK] {'BANNED' if banned else 'OK'} - {info}")
+            return banned, info
+        return False, "Could not check"
+    
+    def get_guild_info(self):
+        """Get guild information"""
+        log_debug(f"  [GUILD INFO] Fetching info for {GUILD_ID}...")
+        data, status = self.siambhau_request("/guild/info", {
+            "clan_id": GUILD_ID
+        }, key=FFINFO_KEY)
+        
+        if status == 200:
+            log_debug(f"  [GUILD INFO] ✅ {data.get('name', 'N/A')}")
+            return data
+        log_debug(f"  [GUILD INFO] ❌ {data}")
+        return None
     
     def join_guild(self, uid, password, jwt):
-        log_debug(f"  Attempting to join guild {GUILD_ID} with {uid}...")
-        time.sleep(1)
-        success = random.choice([True, False])
-        return success
+        """Join guild using available keys"""
+        log_debug(f"  [JOIN] Attempting to join guild {GUILD_ID}...")
+        
+        # Try with FFINFO key first (if it has guild access)
+        if jwt:
+            data, status = self.siambhau_request("/guild/join", {
+                "clan_id": GUILD_ID, "jwt": jwt
+            }, key=FFINFO_KEY)
+        else:
+            data, status = self.siambhau_request("/guild/join", {
+                "clan_id": GUILD_ID, "uid": uid, "pass": password
+            }, key=FFINFO_KEY)
+        
+        if status == 200 and data.get("success"):
+            log_debug(f"  [JOIN] ✅ Joined guild! {data.get('message', '')}")
+            return True, data.get("message", "Joined")
+        
+        # If FFINFO key failed, try BIND key
+        log_debug(f"  [JOIN] FFINFO key failed, trying BIND key...")
+        if jwt:
+            data2, status2 = self.siambhau_request("/guild/join", {
+                "clan_id": GUILD_ID, "jwt": jwt
+            }, key=BIND_KEY)
+        else:
+            data2, status2 = self.siambhau_request("/guild/join", {
+                "clan_id": GUILD_ID, "uid": uid, "pass": password
+            }, key=BIND_KEY)
+        
+        if status2 == 200 and data2.get("success"):
+            log_debug(f"  [JOIN] ✅ Joined guild with BIND key!")
+            return True, data2.get("message", "Joined")
+        
+        error_msg = data.get("message") or data.get("error") or "Access denied"
+        log_debug(f"  [JOIN] ❌ Failed: {error_msg}")
+        log_debug(f"  [JOIN] 💡 Tip: You may need a key with 'guild' access from @SiamBhau")
+        return False, error_msg
     
-    def load_accounts(self):
-        accounts = []
-        if os.path.exists(GUEST_FILE):
-            with open(GUEST_FILE) as f:
-                for line in f:
-                    line = line.strip()
-                    if "|" in line:
-                        parts = line.split("|")
-                        uid = parts[0].strip()
-                        pw = parts[1].strip()
-                        name = parts[2].strip() if len(parts) > 2 else ""
-                        accounts.append({"uid": uid, "password": pw, "name": name, "server": SERVER})
-        return accounts
-    
-    def write_accounts_file(self):
-        with open(ACCOUNTS_FILE, "w") as f:
-            f.write(f"FREE FIRE GUILD BOT - ACCOUNT LOG\n")
-            f.write(f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"GUILD ID: {GUILD_ID}\n")
-            f.write(f"TOTAL ACCOUNTS: {len(self.accounts)}\n")
-            f.write("="*50 + "\n\n")
-            for i, acc in enumerate(self.accounts, 1):
-                f.write(f"===== ACCOUNT #{i} =====\n")
-                f.write(f"UID: {acc.get('uid','N/A')}\n")
-                f.write(f"PASSWORD: {acc.get('password','N/A')}\n")
-                f.write(f"NAME: {acc.get('name','N/A')}\n")
-                f.write(f"LEVEL: {acc.get('level',0)}\n")
-                f.write(f"BANNED: {acc.get('banned',False)}\n")
-                f.write(f"BAN_INFO: {acc.get('ban_info','None')}\n")
-                f.write(f"IN_GUILD: {acc.get('in_guild',False)}\n")
-                f.write(f"GUILD_ID: {acc.get('guild_id','None')}\n")
-                f.write(f"STATUS: {acc.get('status','ACTIVE')}\n")
-                f.write("="*21 + "\n\n")
-        log_debug(f"[✓] Written {len(self.accounts)} accounts to {ACCOUNTS_FILE}")
+    def generate_guest(self, index):
+        """Generate guest credentials (real ones need the FF app)"""
+        uid = str(random.randint(1000000000, 9999999999))
+        pw = ''.join(random.choices(string.ascii_uppercase + string.digits, k=32))
+        name = f"Guest_{index}"
+        return uid, pw, name
     
     def run_bot(self):
-        log_debug("="*50)
-        log_debug("BOT STARTED")
+        log_section("FF GUILD GLORY BOT - STARTING")
         log_debug(f"Guild ID: {GUILD_ID}")
         log_debug(f"Bot Count: {BOT_COUNT}")
         log_debug(f"Server: {SERVER}")
-        log_debug("="*50)
+        log_debug(f"FFINFO Key: {FFINFO_KEY}")
+        log_debug(f"BIND Key: {BIND_KEY}")
         
-        self.accounts = self.load_accounts()
-        if not self.accounts:
-            self.generate_accounts()
-        else:
-            log_debug(f"[+] Loaded {len(self.accounts)} existing accounts")
+        # First, check guild info
+        log_section("STEP 0: CHECK GUILD INFO")
+        guild_info = self.get_guild_info()
+        if guild_info:
+            log_debug(f"Guild Name: {guild_info.get('name', 'N/A')}")
+            log_debug(f"Members: {guild_info.get('memberCount', 'N/A')}")
+            log_debug(f"Level: {guild_info.get('level', 'N/A')}")
         
-        log_debug("\n[STEP 2] Naming bots Mrx__...")
-        for i, acc in enumerate(self.accounts):
-            if not acc.get("name") or acc["name"] == "":
-                name = self.name_bot(acc["uid"], acc["password"])
-                acc["name"] = name
-                log_debug(f"  [{i+1}/{len(self.accounts)}] {name}")
-                time.sleep(0.5)
-            else:
-                log_debug(f"  [{i+1}/{len(self.accounts)}] Already named: {acc['name']}")
+        self.accounts = []
         
-        log_debug("\n[STEP 3] Checking account status...")
-        for i, acc in enumerate(self.accounts):
-            banned, info = self.check_account(acc["uid"])
-            acc["banned"] = banned
-            acc["ban_info"] = info
-            acc["status"] = "BANNED" if banned else "ACTIVE"
-            acc["level"] = random.randint(1, 5)
-            icon = "BANNED" if banned else "OK"
-            log_debug(f"  [{i+1}] {icon} {acc.get('name')} - Level {acc['level']} - Banned: {banned}")
-        
-        self.write_accounts_file()
-        
-        log_debug(f"\n[STEP 4] Joining guild {GUILD_ID}...")
-        log_debug(f"IMPORTANT: Make sure 'Auto Approve' is ON in your Free Fire guild settings!")
-        
-        join_count = 0
-        for i, acc in enumerate(self.accounts):
-            if acc.get("banned"):
-                log_debug(f"  [{i+1}] SKIP (banned): {acc.get('name')}")
-                continue
+        for i in range(BOT_COUNT):
+            log_section(f"ACCOUNT {i+1}/{BOT_COUNT}")
+            uid, pw, name = self.generate_guest(i+1)
+            log_debug(f"UID: {uid}")
             
-            log_debug(f"  [{i+1}] Joining {acc.get('name')}...")
-            jwt = self.get_jwt(acc["uid"], acc["password"])
+            # Get JWT
+            jwt = self.get_jwt(uid, pw)
             
-            if jwt:
-                success = self.join_guild(acc["uid"], acc["password"], jwt)
-                acc["in_guild"] = success
-                acc["guild_id"] = GUILD_ID if success else "None"
-                
-                if success:
-                    join_count += 1
-                    log_debug(f"  JOINED guild!")
-                else:
-                    log_debug(f"  FAILED to join guild")
+            # Check ban
+            banned, ban_info = self.check_ban(uid)
+            
+            # Join guild
+            joined = False
+            join_msg = "Not attempted"
+            if not banned:
+                joined, join_msg = self.join_guild(uid, pw, jwt)
             else:
-                log_debug(f"  No JWT token - can't join")
-                acc["in_guild"] = False
+                log_debug(f"  [SKIP] Account is banned")
+            
+            self.accounts.append({
+                "uid": uid,
+                "password": pw,
+                "name": name,
+                "jwt": jwt[:40] + "..." if jwt else "N/A",
+                "banned": banned,
+                "ban_info": ban_info,
+                "joined_guild": joined,
+                "join_message": join_msg,
+                "status": "BANNED" if banned else ("IN GUILD" if joined else "ACTIVE"),
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            
+            self.write_status()
+            time.sleep(1.5)
         
-        log_debug(f"\n[✓] Guild join complete: {join_count}/{len(self.accounts)} joined")
-        self.write_accounts_file()
+        self.write_status()
         
-        log_debug(f"\n{'='*50}")
-        log_debug(f"BOT SETUP COMPLETE")
-        log_debug(f"Check /accounts for full info")
-        log_debug(f"Check /debug for detailed logs")
-        log_debug(f"{'='*50}")
+        joined_count = sum(1 for a in self.accounts if a["joined_guild"])
+        banned_count = sum(1 for a in self.accounts if a["banned"])
+        
+        log_section("BOT COMPLETE - SUMMARY")
+        log_debug(f"Total: {len(self.accounts)}")
+        log_debug(f"Joined Guild: {joined_count}")
+        log_debug(f"Banned: {banned_count}")
+        log_debug(f"Check /accounts for full details")
+    
+    def write_status(self):
+        with open(ACCOUNTS_FILE, "w") as f:
+            f.write("="*70 + "\n")
+            f.write("FREE FIRE GUILD GLORY BOT - ACCOUNT STATUS\n")
+            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Guild ID: {GUILD_ID}\n")
+            f.write(f"Server: {SERVER}\n")
+            f.write(f"Total: {len(self.accounts)}\n")
+            f.write("="*70 + "\n\n")
+            
+            for i, acc in enumerate(self.accounts, 1):
+                f.write(f"ACCOUNT #{i}\n")
+                for k, v in acc.items():
+                    f.write(f"  {k}: {v}\n")
+                f.write("-"*40 + "\n")
