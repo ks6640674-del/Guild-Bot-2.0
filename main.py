@@ -6,7 +6,7 @@ import random
 import string
 import hashlib
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from datetime import datetime
 
 # ===== YOUR SETTINGS =====
@@ -45,16 +45,16 @@ Guild ID: **{GUILD_ID}**
 Bots: **{BOT_COUNT}**
 
  
-[📄 View accounts]({request.host_url}accounts)
+<a href='/accounts'>View accounts</a>
 
  
-[🔍 View Debug Log]({request.host_url}debug)
+<a href='/debug'>View Debug Log</a>
 
  
-[📊 View Stats]({request.host_url}stats)
+<a href='/stats'>View Stats</a>
 
  
-[🔄 Run Bot Now]({request.host_url}run)
+<a href='/run'>Run Bot Now</a>
 
  
     """
@@ -75,16 +75,16 @@ def view_debug():
 
 @app.route("/stats")
 def stats():
-    accounts = []
+    acc_count = 0
     if os.path.exists(GUEST_FILE):
         with open(GUEST_FILE) as f:
             for line in f:
                 if "|" in line:
-                    accounts.append(line.strip())
+                    acc_count += 1
     return jsonify({
         "guild_id": GUILD_ID,
         "bots": BOT_COUNT,
-        "accounts_created": len(accounts),
+        "accounts_created": acc_count,
         "server": "IND",
         "status": "idle"
     })
