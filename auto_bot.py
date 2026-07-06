@@ -1,3 +1,5 @@
+# === IMPORT FLASK FROM MAIN (so Vercel finds the app) ===
+# This file is imported by main.py, not run directly
 #!/usr/bin/env python3
 """
 FF GUILD BOT — INDIA SERVER
@@ -664,11 +666,7 @@ class AutoBot:
 # ============================================================
 # WEB DASHBOARD (Optional)
 # ============================================================
-def create_app():
-    """Flask web app for monitoring"""
-    from flask import Flask, jsonify
-    
-    app = Flask(__name__)
+# Flask app is in main.py — nothing needed here
     
     @app.route("/")
     def home():
